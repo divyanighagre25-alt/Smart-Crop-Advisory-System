@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Crop Advisory 🌱</title>
+<style>
+body { 
+    font-family: Arial, sans-serif; 
+    padding: 20px; 
+    background: #f0f5f0; 
+}
+h2 { color: #2e7d32; }
+input, select, button { padding: 8px; margin: 5px 0; width: 100%; }
+#sensorData, #recommendations, #notifications { margin-top: 20px; }
+.card { border: 1px solid #ccc; padding: 10px; border-radius: 5px; margin-bottom: 10px; background: #fff; }
+#soilPreview img { max-width: 100%; max-height: 200px; border-radius: 5px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h2 id="title"></h2>
+
+<label id="langLabel"></label>
+<select id="language" onchange="updateLanguage()">
+  <option value="en">English</option>
+  <option value="hi">हिन्दी</option>
+  <option value="mr">मराठी</option>
+</select>
+
+<h3 id="inputHeading"></h3>
+<label id="cropLabel"></label>
+<select id="cropType"></select>
+
+<label id="sizeLabel"></label>
+<input type="number" id="farmSize">
+
+<label id="soilLabel"></label>
+<select id="soilType"></select>
+
+<label id="soilPhotoLabel"></label>
+<input type="file" id="soilPhoto" accept="image/*" onchange="previewSoilPhoto()">
+<div id="soilPreview" class="card" style="text-align:center;"></div>
+
+<label id="locLabel"></label>
+<input type="text" id="location" oninput="handleLocationInput()">
+
+<button id="adviceBtn" onclick="generateRecommendations()"></button>
+
+<h3 id="sensorHeading"></h3>
+<div id="sensorData"></div>
+
+<h3 id="recHeading"></h3>
+<div id="recommendations"></div>
+<button id="voiceBtn" onclick="speakAll()"></button>
+
+<h3 id="notifHeading"></h3>
+<div id="notifications"></div>
+
+<h3 id="feedbackHeading"></h3>
+<button id="feedbackBtn" onclick="collectFeedback()"></button>
+
+<script>
+// ---------------- TRANSLATIONS ----------------
+const translations = {
+  en: { title:"🌾 Smart Crop Advisory System", langLabel:"🌐 Select Language:", inputHeading:"1️⃣ Farmer Input",
+        cropLabel:"Crop Type:", sizeLabel:"Farm Size (acres):", soilLabel:"Soil Type:", soilPhotoLabel:"Upload Soil Photo:",
+        locLabel:"Location:", adviceBtn:"Get AI Recommendations 🤖", sensorHeading:"2️⃣ Simulated Sensor Data", recHeading:"3️⃣ AI Recommendations",
+        voiceBtn:"🔊 Listen", notifHeading:"4️⃣ Notifications & Delivery", feedbackHeading:"5️⃣ Feedback", feedbackBtn:"Send Feedback",
+        notif:["📱 Mobile notification sent!", "🔊 Voice guidance ready!", "📨 SMS/USSD sent for offline farmers!"],
+        fillAlert:"Please fill all fields", selectCrop:"Select Crop", selectSoil:"Select Soil",
+        farmPlaceholder:"Enter farm size", locPlaceholder:"Enter location", smsVoice:"Your crop advisory has been sent via SMS/USSD.",
+        photoUpload:"Soil photo uploaded successfully.", enterLoc:"Enter location to see sensor data"},
+  hi: { title:"🌾 स्मार्ट फसल सलाह प्रणाली", langLabel:"🌐 भाषा चुनें:", inputHeading:"1️⃣ किसान इनपुट",
+        cropLabel:"फसल का प्रकार:", sizeLabel:"खेत का आकार (एकड़):", soilLabel:"मिट्टी का प्रकार:", soilPhotoLabel:"मिट्टी का फोटो अपलोड करें:",
+        locLabel:"स्थान:", adviceBtn:"एआई सलाह प्राप्त करें 🤖", sensorHeading:"2️⃣ सेंसर डेटा (सिम्युलेटेड)", recHeading:"3️⃣ एआई सलाह",
+        voiceBtn:"🔊 सुनें", notifHeading:"4️⃣ सूचनाएँ और वितरण", feedbackHeading:"5️⃣ प्रतिक्रिया", feedbackBtn:"प्रतिक्रिया भेजें",
+        notif:["📱 मोबाइल नोटिफिकेशन भेजा गया!", "🔊 वॉयस गाइडेंस तैयार!", "📨 एसएमएस/यूएसएसडी भेजा गया!"],
+        fillAlert:"कृपया सभी जानकारी भरें", selectCrop:"फसल चुनें", selectSoil:"मिट्टी चुनें",
+        farmPlaceholder:"खेत का आकार दर्ज करें", locPlaceholder:"स्थान दर्ज करें", smsVoice:"आपकी फसल सलाह SMS/USSD के माध्यम से भेजी गई है।",
+        photoUpload:"मिट्टी का फोटो सफलतापूर्वक अपलोड किया गया।", enterLoc:"सेंसर डेटा दिखाने के लिए स्थान दर्ज करें"},
+  mr: { title:"🌾 स्मार्ट पीक सल्ला प्रणाली", langLabel:"🌐 भाषा निवडा:", inputHeading:"1️⃣ शेतकरी माहिती",
+        cropLabel:"पीक प्रकार:", sizeLabel:"शेताचा आकार (एकर):", soilLabel:"मातीचा प्रकार:", soilPhotoLabel:"मातीचा फोटो अपलोड करा:",
+        locLabel:"ठिकाण:", adviceBtn:"एआय सल्ला घ्या 🤖", sensorHeading:"2️⃣ सेन्सर डेटा (सिम्युलेटेड)", recHeading:"3️⃣ एआय सल्ला",
+        voiceBtn:"🔊 ऐका", notifHeading:"4️⃣ सूचना आणि वितरण", feedbackHeading:"5️⃣ अभिप्राय", feedbackBtn:"अभिप्राय पाठवा",
+        notif:["📱 मोबाईल सूचना पाठवली!", "🔊 आवाज मार्गदर्शन तयार!", "📨 एसएमएस/यूएसएसडी पाठवले!"],
+        fillAlert:"कृपया सर्व माहिती भरा", selectCrop:"पीक निवडा", selectSoil:"माती निवडा",
+        farmPlaceholder:"शेताचा आकार टाका", locPlaceholder:"ठिकाण टाका", smsVoice:"आपली पीक सल्ला SMS/USSD द्वारे पाठवण्यात आली आहे.",
+        photoUpload:"मातीचा फोटो यशस्वीरित्या अपलोड झाला.", enterLoc:"सेन्सर डेटा पाहण्यासाठी ठिकाण टाका"}
+};
+
+// ---------------- CROPS & SOIL ----------------
+const cropOptions = {
+  en:{wheat:"Wheat",rice:"Rice",cotton:"Cotton",tomato:"Tomato",sugarcane:"Sugarcane"},
+  hi:{wheat:"गेहूं",rice:"धान",cotton:"कपास",tomato:"टमाटर",sugarcane:"गन्ना"},
+  mr:{wheat:"गहू",rice:"तांदूळ",cotton:"कापूस",tomato:"टोमॅटो",sugarcane:"ऊस"}
+};
+const soilOptions = {
+  en:{clay:"Clay",sandy:"Sandy",loamy:"Loamy",silt:"Silt"},
+  hi:{clay:"मिट्टी (क्ले)",sandy:"रेतीली मिट्टी",loamy:"दोमट मिट्टी",silt:"सिल्ट मिट्टी"},
+  mr:{clay:"माती (क्ले)",sandy:"वाळू माती",loamy:"लोमट माती",silt:"सिल्ट माती"}
+};
+
+// ---------------- SENSOR ----------------
+let sensorData={soilMoisture:65,temperature:28,humidity:72};
+let sensorInterval = null;
+
+function handleLocationInput() {
+    const location = document.getElementById('location').value.trim();
+    const lang = document.getElementById("language").value;
+    const t = translations[lang];
+    const sensorDiv = document.getElementById('sensorData');
+
+    if(location === "") {
+        sensorDiv.innerHTML = `<div class="card" style="color:#888;">${t.enterLoc}</div>`;
+        if(sensorInterval) {
+            clearInterval(sensorInterval);
+            sensorInterval = null;
+        }
+        return;
+    }
+
+    if(!sensorInterval) {
+        sensorInterval = setInterval(() => {
+            sensorData.soilMoisture = Math.max(30, Math.min(90, sensorData.soilMoisture + (Math.random() - 0.5) * 5));
+            sensorData.temperature = Math.max(20, Math.min(40, sensorData.temperature + (Math.random() - 0.5) * 2));
+            sensorData.humidity = Math.max(40, Math.min(95, sensorData.humidity + (Math.random() - 0.5) * 3));
+            displaySensorData();
+        }, 5000);
+    }
+    displaySensorData();
+}
+
+function displaySensorData(){
+    const location = document.getElementById('location').value.trim();
+    const lang = document.getElementById("language").value;
+    const t = translations[lang];
+    const sensorDiv = document.getElementById('sensorData');
+
+    if(location === "") {
+        sensorDiv.innerHTML = `<div class="card" style="color:#888;">${t.enterLoc}</div>`;
+        return;
+    }
+
+    sensorDiv.innerHTML = `
+        <div class="card">💧 ${lang==='hi'?'मिट्टी में नमी':lang==='mr'?'मातीतील ओलसरपणा':'Soil Moisture'}: ${Math.round(sensorData.soilMoisture)}%</div>
+        <div class="card">🌡 ${lang==='hi'?'तापमान':lang==='mr'?'तापमान':'Temperature'}: ${Math.round(sensorData.temperature)}°C</div>
+        <div class="card">🌫 ${lang==='hi'?'आर्द्रता':lang==='mr'?'हमी':'Humidity'}: ${Math.round(sensorData.humidity)}%</div>
+    `;
+}
+
+// ---------------- UPDATE UI ----------------
+function updateSelectOptions(){
+  const lang=document.getElementById("language").value;
+  const t=translations[lang];
+
+  let cropSelect=document.getElementById("cropType");
+  cropSelect.innerHTML=`<option value="">${t.selectCrop}</option>`;
+  for(let key in cropOptions[lang]) cropSelect.innerHTML+=`<option value="${key}">${cropOptions[lang][key]}</option>`;
+
+  let soilSelect=document.getElementById("soilType");
+  soilSelect.innerHTML=`<option value="">${t.selectSoil}</option>`;
+  for(let key in soilOptions[lang]) soilSelect.innerHTML+=`<option value="${key}">${soilOptions[lang][key]}</option>`;
+
+  document.getElementById("farmSize").placeholder = t.farmPlaceholder;
+  document.getElementById("location").placeholder = t.locPlaceholder;
+  document.getElementById("soilPhotoLabel").innerText = t.soilPhotoLabel;
+}
+
+function updateLanguage(){
+  const lang=document.getElementById("language").value;
+  const t=translations[lang];
+
+  document.getElementById("title").innerText=t.title;
+  document.getElementById("langLabel").innerText=t.langLabel;
+  document.getElementById("inputHeading").innerText=t.inputHeading;
+  document.getElementById("cropLabel").innerText=t.cropLabel;
+  document.getElementById("sizeLabel").innerText=t.sizeLabel;
+  document.getElementById("soilLabel").innerText=t.soilLabel;
+  document.getElementById("locLabel").innerText=t.locLabel;
+  document.getElementById("adviceBtn").innerText=t.adviceBtn;
+  document.getElementById("sensorHeading").innerText=t.sensorHeading;
+  document.getElementById("recHeading").innerText=t.recHeading;
+  document.getElementById("voiceBtn").innerText=t.voiceBtn;
+  document.getElementById("notifHeading").innerText=t.notifHeading;
+  document.getElementById("feedbackHeading").innerText=t.feedbackHeading;
+  document.getElementById("feedbackBtn").innerText=t.feedbackBtn;
+
+  updateSelectOptions();
+  handleLocationInput(); // update sensor section
+}
+
+// ---------------- SOIL PHOTO ----------------
+function previewSoilPhoto() {
+    const fileInput = document.getElementById('soilPhoto');
+    const preview = document.getElementById('soilPreview');
+    const lang = document.getElementById("language").value;
+    const t = translations[lang];
+
+    if(fileInput.files && fileInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.innerHTML = `<img src="${e.target.result}" alt="Soil Photo">`;
+            speakText(t.photoUpload);
+        };
+        reader.readAsDataURL(fileInput.files[0]);
+    } else {
+        preview.innerHTML = '';
+    }
+}
+
+// ---------------- AI ADVICE ----------------
+let lastAdvice="";
+function generateRecommendations(){
+  const crop=document.getElementById('cropType').value;
+  const farmSize=document.getElementById('farmSize').value;
+  const soil=document.getElementById('soilType').value;
+  const location=document.getElementById('location').value;
+  const lang=document.getElementById('language').value;
+  const t=translations[lang];
+
+  if(!crop||!farmSize||!soil||!location){ alert(t.fillAlert); return; }
+
+  const rec = {
+    wheat:{en:"Plant wheat. Irrigate every 7-10 days. Use NPK 120:60:40.",hi:"गेहूं बोएं। हर 7-10 दिन में सिंचाई करें। एनपीके 120:60:40 डालें।",mr:"गहू पेरा. दर 7-10 दिवसांनी पाणी द्या. NPK 120:60:40 टाका."},
+    rice:{en:"Transplant rice. Keep 2-3 cm water. Apply urea in 3 splits.",hi:"धान की रोपाई करें। 2-3 सेमी पानी रखें। यूरिया 3 बार डालें।",mr:"तांदळाची रोपवाटिका लावा. 2-3 सेमी पाणी ठेवा. युरिया 3 टप्प्यात द्या."},
+    cotton:{en:"Plant cotton. Spacing 45x15 cm. Use Bt variety.",hi:"कपास बोएं। दूरी 45x15 सेमी। Bt किस्म का उपयोग करें।",mr:"कापूस पेरा. अंतर 45x15 सेमी. Bt वेरायटी वापरा."},
+    tomato:{en:"Plant tomato. Mulch to conserve moisture. Stake plants.",hi:"टमाटर लगाएं। नमी बनाए रखने के लिए मल्च करें। पौधों को सहारा दें।",mr:"टोमॅटो पेरा. ओलावा राखण्यासाठी मल्च करा. झाडांना आधार द्या."},
+    sugarcane:{en:"Plant sugarcane. Row spacing 90-120 cm. Apply 280:92:92 NPK.",hi:"गन्ना लगाएं। पंक्ति अंतर 90-120 सेमी। 280:92:92 NPK डालें।",mr:"ऊस पेरा. रो spacing 90-120 सेमी. 280:92:92 NPK टाका."}
+  };
+
+  lastAdvice=rec[crop][lang];
+  document.getElementById('recommendations').innerHTML=`<div class="card">${lastAdvice}</div>`;
+  document.getElementById('notifications').innerHTML=`<div class="card">${t.notif[0]}</div><div class="card">${t.notif[1]}</div><div class="card">${t.notif[2]}</div>`;
+  speakText(t.smsVoice);
+}
+
+// ---------------- VOICE ----------------
+function speakText(text){
+  const lang=document.getElementById("language").value;
+  let msg=new SpeechSynthesisUtterance(text);
+  msg.lang=lang==='hi'?'hi-IN':lang==='mr'?'mr-IN':'en-IN';
+  window.speechSynthesis.speak(msg);
+}
+
+function speakAll(){
+  const lang=document.getElementById("language").value;
+  const t=translations[lang];
+  const crop=cropOptions[lang][document.getElementById('cropType').value]||'';
+  const farmSize=document.getElementById('farmSize').value;
+  const soil=soilOptions[lang][document.getElementById('soilType').value]||'';
+  const location=document.getElementById('location').value;
+  if(!crop||!farmSize||!soil||!location){ alert(t.fillAlert); return; }
+  const text=`${t.inputHeading}: ${t.cropLabel} ${crop}, ${t.sizeLabel} ${farmSize}, ${t.soilLabel} ${soil}, ${t.locLabel} ${location}. ${lastAdvice}. ${t.smsVoice}`;
+  speakText(text);
+}
+
+// ---------------- FEEDBACK ----------------
+function collectFeedback(){
+  const lang=document.getElementById("language").value;
+  const msg=lang==="hi"?"कृपया अपनी प्रतिक्रिया दें:":lang==="mr"?"कृपया आपला अभिप्राय द्या:":"Please provide feedback:";
+  const feedback=prompt(msg);
+  if(feedback) alert("✅ Thank you / धन्यवाद / धन्यवाद!");
+}
+
+// ---------------- INIT ----------------
+updateLanguage();
+</script>
+
+</body>
+</html>
+
